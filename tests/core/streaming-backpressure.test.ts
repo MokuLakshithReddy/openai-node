@@ -71,5 +71,5 @@ test('does not decode the packed tail after the completion sentinel', async () =
 
   expect(cancel).toHaveBeenCalledTimes(1);
   expect(body.locked).toBe(false);
-  expect(controller.signal.aborted).toBe(false);
+  expect(controller.signal.aborted).toBe(true);
 });
