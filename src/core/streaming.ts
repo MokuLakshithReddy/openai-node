@@ -503,6 +503,7 @@ function createAbortableSSESource(body: NonNullable<Response['body']>, signal: A
         abort();
       }
     },
+    cancel,
     async cleanup(failed: boolean) {
       let cleanupError: unknown;
       try {
@@ -578,7 +579,8 @@ export async function* _iterSSEMessages(
       if (completionSentinelReceived) {
         drainedBytes += sseChunk.byteLength;
         if (drainedBytes >= COMPLETION_DRAIN_MAX_BYTES) {
-          controller.abort();
+          failed = true;
+          void source.cancel();
           return;
         }
         continue;
@@ -591,7 +593,10 @@ export async function* _iterSSEMessages(
         if (sse) {
           if (drainAfterCompletion && sse.data === '[DONE]') {
             completionSentinelReceived = true;
-            completionDrainTimeout = setTimeout(() => controller.abort(), COMPLETION_DRAIN_TIMEOUT_MS);
+            completionDrainTimeout = setTimeout(() => {
+              failed = true;
+              void source.cancel();
+            }, COMPLETION_DRAIN_TIMEOUT_MS);
           }
           yield sse;
         }
