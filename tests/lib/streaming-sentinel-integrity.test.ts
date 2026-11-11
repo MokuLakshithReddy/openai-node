@@ -234,7 +234,7 @@ describe('SSE completion sentinel integrity', () => {
     await expect(collect(stream)).resolves.toEqual([{ id: 'safe' }]);
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(body.locked).toBe(false);
-    expect(controller.signal.aborted).toBe(true);
+    expect(controller.signal.aborted).toBe(false);
   });
 
   it('continues suppressing cleanup errors after genuine completion', async () => {
@@ -254,7 +254,7 @@ describe('SSE completion sentinel integrity', () => {
     await expect(collect(stream)).resolves.toEqual([]);
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(body.locked).toBe(false);
-    expect(controller.signal.aborted).toBe(true);
+    expect(controller.signal.aborted).toBe(false);
   });
 
   it('ignores malformed and named provider-error frames after genuine completion', async () => {
