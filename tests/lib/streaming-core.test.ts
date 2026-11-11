@@ -211,7 +211,7 @@ describe('Stream.fromSSEResponse', () => {
     expect(controller.signal.aborted).toBe(false);
   });
 
-  test('finishes at the completion sentinel and aborts when response cancellation rejects', async () => {
+  test('finishes at the completion sentinel when response cancellation rejects', async () => {
     const cancel = vi.fn().mockRejectedValue(new Error('Response body cancellation failed'));
     const body = new ReadableStream<Uint8Array>(
       {
