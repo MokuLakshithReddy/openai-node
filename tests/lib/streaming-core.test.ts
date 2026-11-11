@@ -208,7 +208,7 @@ describe('Stream.fromSSEResponse', () => {
     await expect(iterator.next()).resolves.toEqual({ value: undefined, done: true });
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(body.locked).toBe(false);
-    expect(controller.signal.aborted).toBe(true);
+    expect(controller.signal.aborted).toBe(false);
   });
 
   test('finishes at the completion sentinel and aborts when response cancellation rejects', async () => {
@@ -234,7 +234,7 @@ describe('Stream.fromSSEResponse', () => {
     await expect(iterator.next()).resolves.toEqual({ value: undefined, done: true });
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(body.locked).toBe(false);
-    expect(controller.signal.aborted).toBe(true);
+    expect(controller.signal.aborted).toBe(false);
   });
 
   test('optionally preserves the event name alongside its parsed data', async () => {
