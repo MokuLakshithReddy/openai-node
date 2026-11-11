@@ -9,6 +9,7 @@ import type { OpenAI } from '../client';
 
 type Bytes = string | ArrayBuffer | Uint8Array | null | undefined;
 
+// Read briefly after [DONE] so normal HTTP response framing can complete and the socket can be reused.
 const COMPLETION_DRAIN_TIMEOUT_MS = 1_000;
 const COMPLETION_DRAIN_MAX_BYTES = 64 * 1024;
 
@@ -536,6 +537,7 @@ function createAbortableSSESource(body: NonNullable<Response['body']>, signal: A
 /**
  * Decodes complete SSE records from a response and aborts when its body is absent.
  * Complete events are decoded on demand without imposing a line or event size limit.
+ * When enabled, draining after `[DONE]` is bounded by time and bytes and discards all trailing frames.
  *
  * @yields {ServerSentEvent} Each decoded server-sent event in wire order.
  */
@@ -595,7 +597,7 @@ export async function* _iterSSEMessages(
         }
       }
     }
-    if (signal.aborted) {
+    if (signal.aborted || completionSentinelReceived) {
       return;
     }
     for (const line of lineDecoder.flush()) {
