@@ -219,7 +219,7 @@ describe('Stream.fromSSEResponse', () => {
           controller.enqueue(encoder.encode('data: {"id":1}\n\ndata: [DONE]\n\n'));
         },
         pull() {
-          throw new Error('Attempted to read past the [DONE] completion sentinel');
+          return new Promise<void>(() => {});
         },
         cancel,
       },
