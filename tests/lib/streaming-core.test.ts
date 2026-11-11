@@ -37,6 +37,28 @@ describe('Stream.fromSSEResponse', () => {
     await expect(collect(stream)).resolves.toEqual([{ id: 1 }, { id: 2 }]);
   });
 
+  test('drains a naturally completed response body after the completion sentinel', async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>(
+      {
+        start(source) {
+          source.enqueue(encoder.encode('data: [DONE]\\n\\n'));
+        },
+        pull(source) {
+          source.close();
+        },
+        cancel,
+      },
+      { highWaterMark: 0 },
+    );
+    const controller = new AbortController();
+
+    await expect(collect(Stream.fromSSEResponse(new Response(body), controller))).resolves.toEqual([]);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(body.locked).toBe(false);
+    expect(controller.signal.aborted).toBe(false);
+  });
+
   test.each(['before', 'registration', 'buffered'])('hides data after %s abort', async (stage) => {
     const cancel = vi.fn();
     const body = new ReadableStream<Uint8Array>({
@@ -163,7 +185,7 @@ describe('Stream.fromSSEResponse', () => {
     },
   );
 
-  test('finishes at the completion sentinel without waiting for the response body to close', async () => {
+  test('bounds response draining after the completion sentinel when the body never closes', async () => {
     const cancel = vi.fn();
     const body = new ReadableStream<Uint8Array>(
       {
@@ -171,7 +193,7 @@ describe('Stream.fromSSEResponse', () => {
           controller.enqueue(encoder.encode('data: {"id":1}\n\ndata: [DONE]\n\n'));
         },
         pull() {
-          throw new Error('Attempted to read past the [DONE] completion sentinel');
+          return new Promise<void>(() => {});
         },
         cancel,
       },
@@ -186,7 +208,7 @@ describe('Stream.fromSSEResponse', () => {
     await expect(iterator.next()).resolves.toEqual({ value: undefined, done: true });
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(body.locked).toBe(false);
-    expect(controller.signal.aborted).toBe(false);
+    expect(controller.signal.aborted).toBe(true);
   });
 
   test('finishes at the completion sentinel and aborts when response cancellation rejects', async () => {
