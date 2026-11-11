@@ -214,7 +214,7 @@ describe('SSE completion sentinel integrity', () => {
     expect(controller.signal.aborted).toBe(true);
   });
 
-  it('finishes an exact sentinel immediately without waiting for physical response EOF', async () => {
+  it('bounds draining after an exact sentinel when the response never reaches EOF', async () => {
     const cancel = vi.fn();
     const body = new ReadableStream<Uint8Array>(
       {
@@ -222,7 +222,7 @@ describe('SSE completion sentinel integrity', () => {
           controller.enqueue(encoder.encode(record(JSON.stringify({ id: 'safe' })) + record('[DONE]')));
         },
         pull() {
-          throw new Error('The response was read beyond its exact completion sentinel.');
+          return new Promise<void>(() => {});
         },
         cancel,
       },
@@ -234,7 +234,7 @@ describe('SSE completion sentinel integrity', () => {
     await expect(collect(stream)).resolves.toEqual([{ id: 'safe' }]);
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(body.locked).toBe(false);
-    expect(controller.signal.aborted).toBe(false);
+    expect(controller.signal.aborted).toBe(true);
   });
 
   it('continues suppressing cleanup errors after genuine completion', async () => {
