@@ -9,6 +9,9 @@ import type { OpenAI } from '../client';
 
 type Bytes = string | ArrayBuffer | Uint8Array | null | undefined;
 
+const COMPLETION_DRAIN_TIMEOUT_MS = 1_000;
+const COMPLETION_DRAIN_MAX_BYTES = 64 * 1024;
+
 function isTransportAbortError(error: unknown): boolean {
   return !(error instanceof APIError) && isAbortError(error);
 }
@@ -123,7 +126,7 @@ export class Stream<Item> implements AsyncIterable<Item> {
       consumed = true;
       let done = false;
       let receivedCompletionSentinel = false;
-      const messages = _iterSSEMessages(response, controller);
+      const messages = _iterSSEMessages(response, controller, true);
       const closeMessages = messages.return.bind(messages);
       messages.return = (value) => {
         // Abort before nested iterator cleanup can wait on the response body's cancellation.
@@ -136,7 +139,10 @@ export class Stream<Item> implements AsyncIterable<Item> {
         for await (const sse of messages) {
           if (sse.data === '[DONE]') {
             receivedCompletionSentinel = true;
-            break;
+            continue;
+          }
+          if (receivedCompletionSentinel) {
+            continue;
           }
 
           let data;
@@ -536,6 +542,7 @@ function createAbortableSSESource(body: NonNullable<Response['body']>, signal: A
 export async function* _iterSSEMessages(
   response: Response,
   controller: AbortController,
+  drainAfterCompletion = false,
 ): AsyncGenerator<ServerSentEvent, void, unknown> {
   if (!response.body) {
     controller.abort();
@@ -556,6 +563,9 @@ export async function* _iterSSEMessages(
   const { signal } = controller;
   const source = createAbortableSSESource(response.body, signal);
   let failed = false;
+  let completionSentinelReceived = false;
+  let drainedBytes = 0;
+  let completionDrainTimeout: ReturnType<typeof setTimeout> | undefined;
 
   try {
     source.start();
@@ -563,12 +573,24 @@ export async function* _iterSSEMessages(
       if (signal.aborted) {
         return;
       }
+      if (completionSentinelReceived) {
+        drainedBytes += sseChunk.byteLength;
+        if (drainedBytes >= COMPLETION_DRAIN_MAX_BYTES) {
+          controller.abort();
+          return;
+        }
+        continue;
+      }
       for (const line of lineDecoder.decode(sseChunk)) {
         if (signal.aborted) {
           return;
         }
         const sse = sseDecoder.decode(line);
         if (sse) {
+          if (drainAfterCompletion && sse.data === '[DONE]') {
+            completionSentinelReceived = true;
+            completionDrainTimeout = setTimeout(() => controller.abort(), COMPLETION_DRAIN_TIMEOUT_MS);
+          }
           yield sse;
         }
       }
@@ -596,10 +618,16 @@ export async function* _iterSSEMessages(
     }
   } catch (error) {
     failed = true;
+    if (completionSentinelReceived && drainAfterCompletion) {
+      return;
+    }
     if (!signal.aborted || (!isAbortError(error) && error !== signal.reason)) {
       throw error;
     }
   } finally {
+    if (completionDrainTimeout !== undefined) {
+      clearTimeout(completionDrainTimeout);
+    }
     await source.cleanup(failed);
   }
 }
