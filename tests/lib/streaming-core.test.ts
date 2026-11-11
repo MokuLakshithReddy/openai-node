@@ -42,7 +42,7 @@ describe('Stream.fromSSEResponse', () => {
     const body = new ReadableStream<Uint8Array>(
       {
         start(source) {
-          source.enqueue(encoder.encode('data: [DONE]\\n\\n'));
+          source.enqueue(encoder.encode('data: [DONE]\n\n'));
         },
         pull(source) {
           source.close();
